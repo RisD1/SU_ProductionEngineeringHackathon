@@ -139,16 +139,16 @@ def create_user():
 @users_bp.route("/users", methods=["GET"])
 def list_users():
     users = User.select().dicts()
-    resulst = []
+    results = []
 
     for user in users:
-        resulst.append({
+        results.append({
             "id": user["id"],
             "username": user["username"],
             "email": user["email"],
             "created_at": user["created_at"].isoformat()
         })
-    return jsonify(resulst), 200
+    return jsonify(results), 200
 
 
 @users_bp.route("/users/<int:id>", methods=["GET"])
