@@ -1,9 +1,10 @@
 from peewee import CharField, BooleanField, DateTimeField, ForeignKeyField, IntegerField
 from app.database import BaseModel
 from app.models.user import User
+from peewee import AutoField
 
 class URL(BaseModel):
-    id = IntegerField(primary_key=True)
+    id = AutoField()
     user = ForeignKeyField(User, backref="urls")
     short_code = CharField(unique=True)
     original_url = CharField()
