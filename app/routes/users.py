@@ -1,8 +1,9 @@
 import csv
 import io
-from datetime import datetime
+import re
 
 from flask import Blueprint, request, jsonify
+from peewee import IntegrityError
 from app.models.user import User
 
 users_bp = Blueprint("users", __name__)
@@ -48,6 +49,53 @@ def import_users_bulk():
         return jsonify({"error": str(e)}), 500
     
 
+@users_bp.route("/users", methods=["POST"])
+def create_user():
+    USERNAME_REGEX = r"^[a-zA-Z][a-zA-Z0-9_]{2,29}$"
+    EMAIL_REGEX = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+    
+    username = data.get("username")
+    email = data.get("email")
+
+    if not username or not email:
+        return jsonify({"error": "username and email are required"}), 400
+
+    if not isinstance(username, str) or not re.match(USERNAME_REGEX, username):
+        return jsonify({
+            "error": "Invalid username",
+            "details": "3-30 chars, letters/numbers/underscore only"
+    }), 422
+
+    if not isinstance(email, str) or not re.match(EMAIL_REGEX, email):
+        return jsonify({
+            "error": "Invalid email",
+            "details": "Must be a valid email format"
+    }), 422
+    
+    username = username.strip()
+    email = email.strip().lower()
+
+    try:
+        user = User.create(username = username, email = email)
+
+        return jsonify({
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "created_at": user.created_at
+        }), 200
+    
+    except IntegrityError:
+        return jsonify({"error": "User already exists"}), 400
+
+
+    
+
 @users_bp.route("/users", methods=["GET"])
 def list_users():
     users = User.select().dicts()
@@ -60,8 +108,6 @@ def get_user_by_id(id):
 
     if not user:
         return jsonify({"error": "user not found"}), 404
-    
-    print(user)
     
     return jsonify({
         "id": user.id,
