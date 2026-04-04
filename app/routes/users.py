@@ -25,10 +25,8 @@ def import_users_bulk():
         users_imported = 0
 
         for row in reader:
-            user_id = int(row["id"])
             username = row["username"].strip()
             email = row["email"].strip()
-            created_at = datetime.fromisoformat(row["created_at"])
 
 
             does_user_exist = User.get_or_none(
@@ -39,10 +37,8 @@ def import_users_bulk():
                 continue
 
             User.create(
-                id = user_id,
                 username = username,
                 email = email, 
-                created_at = created_at
             )
             users_imported += 1
         
@@ -50,3 +46,11 @@ def import_users_bulk():
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+
+@users_bp.route("/users", methods=["GET"])
+def list_users():
+    users = User.select().dicts()
+    return jsonify(list(users))
+
+
