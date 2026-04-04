@@ -1,9 +1,10 @@
-from peewee import CharField, DateTimeField, IntegerField
+from peewee import CharField, DateTimeField, AutoField
+from datetime import datetime
 from app.database import BaseModel
 
 class User(BaseModel):
-    id = IntegerField(primary_key=True)
+    id = AutoField()
     username = CharField(unique=True)
     email = CharField(unique=True)
-    created_at = DateTimeField()
+    created_at = DateTimeField(default=datetime.now)
 
