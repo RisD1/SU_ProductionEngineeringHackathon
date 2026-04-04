@@ -3,7 +3,7 @@ from app.database import BaseModel
 
 class User(BaseModel):
     id = IntegerField(primary_key=True)
-    username = CharField()
+    username = CharField(unique=True)
     email = CharField(unique=True)
     created_at = DateTimeField()
 
