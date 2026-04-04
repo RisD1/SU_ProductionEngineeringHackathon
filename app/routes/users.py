@@ -49,11 +49,9 @@ def import_users_bulk():
 
         users_imported = 0
         rows_to_insert = []
-        seen_usernames = set()
         seen_emails = set()
 
         existing_users = list(User.select(User.username, User.email).dicts())
-        existing_usernames = {u["username"] for u in existing_users}
         existing_emails = {u["email"] for u in existing_users}
 
         for row in reader:
@@ -61,9 +59,7 @@ def import_users_bulk():
             email = row["email"].strip()
 
             if (
-                username in existing_usernames
-                or email in existing_emails
-                or username in seen_usernames
+                email in existing_emails
                 or email in seen_emails
             ):
                 continue
@@ -78,7 +74,6 @@ def import_users_bulk():
                 "email": email,
             })
 
-            seen_usernames.add(username)
             seen_emails.add(email)
             users_imported += 1
         
@@ -103,8 +98,11 @@ def create_user():
 
     data = request.get_json(silent=True) #error is handled by custom handler
 
-    if not data:
+    if not data or data is None:
         return jsonify({"error": "Invalid JSON"}), 400
+    
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
     
     username = data.get("username")
     email = data.get("email")
@@ -128,7 +126,7 @@ def create_user():
             "username": user.username,
             "email": user.email,
             "created_at": user.created_at.isoformat()
-        }), 200
+        }), 201
     
     except IntegrityError:
         return jsonify({"error": "User already exists"}), 409
@@ -138,7 +136,23 @@ def create_user():
 
 @users_bp.route("/users", methods=["GET"])
 def list_users():
-    users = User.select().dicts()
+
+    page = request.args.get("page")
+    per_page = request.args.get("per_page")
+
+    users = User.select().order_by(User.id)
+    if page is not None and per_page is not None:
+        try:
+            page = int(page)
+            per_page = int(per_page)
+        except ValueError:
+            return jsonify({"error": "page and per_page must be integers"}), 400
+    
+        if page < 1 or per_page < 1 or per_page > 100:
+            return jsonify({"error": "Invalid pagination parameters"}), 400
+        users = users.paginate(page, per_page)
+
+    users = users.dicts()
     results = []
 
     for user in users:
@@ -200,3 +214,14 @@ def update_user(id):
         }), 200
     except IntegrityError:
         return jsonify({"error": "username or email already exists"}), 409
+
+
+@users_bp.route("/users/<int:id>", methods=["DELETE"])
+def delete_user(id):
+    user = User.get_or_none(User.id == id)
+
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    
+    user.delete_instance()
+    return jsonify({"message": "user deleted successfully"}), 200
