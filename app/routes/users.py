@@ -123,7 +123,7 @@ def create_user():
             "username": user.username,
             "email": user.email,
             "created_at": user.created_at.isoformat()
-        }), 200
+        }), 201
     
     except IntegrityError:
         return jsonify({"error": "User already exists"}), 409
