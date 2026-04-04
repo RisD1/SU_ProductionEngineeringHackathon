@@ -114,6 +114,7 @@ def create_url():
     # Event logging (non-blocking)
     try:
         Event.create(
+            id=new_url.id,
             user=user,
             url=new_url,
             event_type="created",
