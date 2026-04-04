@@ -12,13 +12,20 @@ def list_events():
     result = []
 
     for event in events:
+        details = None
+        if event.details:
+            try:
+                details = json.loads(event.details)
+            except (json.JSONDecodeError, TypeError):
+                details = event.details
+
         result.append({
             "id": event.id,
             "event_type": event.event_type,
             "timestamp": event.timestamp.isoformat(),
             "url": event.url_id,
             "user": event.user_id,
-            "details": json.loads(event.details) if event.details else None
+            "details": details
         })
 
     return jsonify(result), 200
