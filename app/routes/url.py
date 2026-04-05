@@ -104,10 +104,21 @@ def create_url():
         return jsonify({"error": "Invalid user_id"}), 400
 
     existing_url = URL.get_or_none(
-        (URL.user_id == user_id) & (URL.original_url == original_url) & (URL.is_active == True)
+        (URL.user_id == user_id) & (URL.original_url == original_url)
     )
 
     if existing_url:
+        if not existing_url.is_active:
+            existing_url.is_active = True
+            existing_url.updated_at = datetime.utcnow()
+            existing_url.save()
+
+            create_event_record(
+                event_type="updated",
+                url=existing_url,
+                user=user,
+                details={"short_code": existing_url.short_code, "original_url": original_url}
+            )
         return jsonify(serialize_url(existing_url)), 200
 
     now = datetime.utcnow()
