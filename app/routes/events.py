@@ -14,14 +14,20 @@ def get_next_event_id():
 
 
 def create_event_record(event_type, url, user, details=None):
-    if details is not None and not isinstance(details, dict):
-        raise ValueError("Details must be a JSON object")
+    if details is not None:
+        try:
+            details_json = json.dumps(details)
+        except (TypeError, ValueError):
+            details_json = json.dumps(str(details))
+    else:
+        details_json = None
+
     event = Event.create(
         id=get_next_event_id(),
         event_type=event_type,
         url=url,
         user=user,
-        details=json.dumps(details) if details is not None else None
+        details=details_json
     )
     return event
 
@@ -73,7 +79,6 @@ def list_events():
 
         max_page = (total + per_page - 1) // per_page if total > 0 else 1
         if page > max_page:
-            events = []
             result = []
         else:
             query = query.paginate(page, per_page)
@@ -157,14 +162,14 @@ def create_event():
             missing.append("user_id")
         return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
 
-    if not isinstance(user_id, int) or not isinstance(url_id, int):
-        return jsonify({"error": "user_id and url_id must be integers"}), 400
+    if not isinstance(user_id, int) or user_id <= 0:
+        return jsonify({"error": "user_id must be a positive integer"}), 400
+
+    if not isinstance(url_id, int) or url_id <= 0:
+        return jsonify({"error": "url_id must be a positive integer"}), 400
 
     if not isinstance(event_type, str) or len(event_type.strip()) == 0:
         return jsonify({"error": "event_type must be a non-empty string"}), 400
-
-    if details is not None and not isinstance(details, dict):
-        return jsonify({"error": "Details must be a JSON object"}), 400
 
     user = User.get_or_none(User.id == user_id)
     if not user:
@@ -182,15 +187,13 @@ def create_event():
             details=details
         )
 
-        response_details = details if details is not None else None
-
         return jsonify({
             "id": event.id,
             "event_type": event.event_type,
             "timestamp": event.timestamp.isoformat(),
             "url_id": event.url_id,
             "user_id": event.user_id,
-            "details": response_details
+            "details": details
         }), 201
 
     except Exception as e:
