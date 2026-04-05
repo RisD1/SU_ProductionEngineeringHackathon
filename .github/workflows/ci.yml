@@ -29,6 +29,7 @@ jobs:
       DATABASE_PORT: 5432
       DATABASE_USER: postgres
       DATABASE_PASSWORD: postgres
+      PYTHONPATH: .
 
     steps:
       - name: Checkout code
@@ -44,7 +45,7 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov psycopg2-binary
 
-      - name: Wait for DB
+      - name: Wait for PostgreSQL
         run: |
           until pg_isready -h localhost -p 5432; do
             sleep 1
