@@ -8,7 +8,7 @@ db = DatabaseProxy()
 
 class BaseModel(Model):
     class Meta:
-        database = hackathon_db
+        database = db,
 
 def connect_with_retry(db, retries=10, delay=2):
     for i in range(retries):
