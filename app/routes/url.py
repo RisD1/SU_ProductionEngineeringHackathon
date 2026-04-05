@@ -225,20 +225,31 @@ def delete_url(id):
     url = URL.get_or_none(URL.id == id)
 
     if not url:
-        return "", 404
+        return jsonify({"error": "URL not found"}), 404
 
-    Event.create(
-        id=get_next_event_id(),
-        url=url,
-        user=url.user,
-        event_type="deleted",
-        timestamp=datetime.utcnow(),
-        details={"short_code": url.short_code}
-    )
+    now = datetime.utcnow()
+
+
+    try:
+        Event.create(
+            url=url,
+            user=url.user,
+            event_type="deleted",
+            timestamp=now,
+            details=json.dumps({
+                "short_code": url.short_code,
+                "original_url": url.original_url
+            })
+        )
+    except Exception as e:
+        print("Event logging failed:", e)
+
+
+    Event.delete().where(Event.url_id == id).execute()
 
     url.delete_instance()
 
-    return jsonify({"message": "URL deleted successfully"}), 200
+    return "", 204
 
 
 @url_bp.route("/events", methods=["GET"])
