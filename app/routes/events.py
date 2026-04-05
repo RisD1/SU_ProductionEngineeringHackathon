@@ -9,7 +9,6 @@ from app.database import db
 events_bp = Blueprint("events", __name__)
 
 
-# Auto grader sequence reset for event id after seeding
 def sync_event_id_sequence():
     db.execute_sql("""
         SELECT setval(
@@ -31,7 +30,6 @@ def list_events():
 
     query = Event.select()
 
-    # Filters
     if event_type:
         query = query.where(Event.event_type == event_type)
 
@@ -49,12 +47,9 @@ def list_events():
             return jsonify({"error": "url_id must be an integer"}), 400
         query = query.where(Event.url == url_id)
 
-    # Ordering
     query = query.order_by(Event.timestamp.desc())
-
     total = query.count()
 
-    # Enforce correct pagination usage
     if (page is None) ^ (per_page is None):
         return jsonify({"error": "Both page and per_page are required"}), 400
 
@@ -77,8 +72,6 @@ def list_events():
 
     for event in query:
         details = None
-
-        # Correct handling of stored JSON
         if event.details is not None:
             try:
                 details = json.loads(event.details)
@@ -99,7 +92,6 @@ def list_events():
         "total": total
     }
 
-    # Only include pagination fields if used
     if paginated:
         response["page"] = page
         response["per_page"] = per_page
@@ -111,7 +103,6 @@ def list_events():
 def create_event():
     data = request.get_json(silent=True)
 
-    # Invalid JSON
     if data is None:
         return jsonify({"error": "Invalid JSON"}), 400
 
@@ -123,27 +114,28 @@ def create_event():
     user_id = data.get("user_id")
     details = data.get("details")
 
-    # Required fields
     if event_type is None or url_id is None or user_id is None:
         return jsonify({"error": "Missing required fields"}), 400
 
-    # Type validation
-    if not isinstance(event_type, str) or not event_type.strip():
-        return jsonify({"error": "event_type must be a non-empty string"}), 400
+    if not isinstance(event_type, str):
+        return jsonify({"error": "event_type must be a string"}), 400
 
     if not isinstance(user_id, int) or not isinstance(url_id, int):
         return jsonify({"error": "user_id and url_id must be integers"}), 400
 
-    # Details must be JSON object if present
-    if details is not None and not isinstance(details, dict):
-        return jsonify({"error": "Details must be a JSON object"}), 400
+    if details is not None:
+        try:
+            details_str = json.dumps(details)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid details format"}), 400
+    else:
+        details_str = None
 
-    # Foreign key validation
     user = User.get_or_none(User.id == user_id)
     url = URL.get_or_none(URL.id == url_id)
 
     if not user or not url:
-        return jsonify({"error": "User or URL not found"}), 404
+        return jsonify({"error": "User or URL not found"}), 400
 
     try:
         sync_event_id_sequence()
@@ -152,8 +144,7 @@ def create_event():
             event_type=event_type,
             url=url,
             user=user,
-            # Preserve {} correctly
-            details=json.dumps(details) if details is not None else None
+            details=details_str
         )
 
         return jsonify({
