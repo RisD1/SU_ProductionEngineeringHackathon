@@ -91,7 +91,7 @@ def create_url():
     original_url = original_url.strip()
 
     if not original_url:
-        return jsonify({"error": "original_url cannot be empty"}), 400
+            return jsonify({"error": "original_url cannot be empty"}), 400
 
     if not is_valid_url(original_url):
         return jsonify({"error": "Invalid URL format"}), 400
@@ -102,6 +102,13 @@ def create_url():
     user = User.get_or_none(User.id == user_id)
     if not user:
         return jsonify({"error": "Invalid user_id"}), 400
+
+    existing_url = URL.get_or_none(
+        (URL.user_id == user_id) & (URL.original_url == original_url) & (URL.is_active == True)
+    )
+
+    if existing_url:
+        return jsonify(serialize_url(existing_url)), 200
 
     now = datetime.utcnow()
     code = generate_unique_code()
