@@ -7,8 +7,6 @@ db = DatabaseProxy()
 
 class BaseModel(Model):
     class Meta:
-        database = db
-
         database = db,
 
 def connect_with_retry(db, retries=10, delay=2):
