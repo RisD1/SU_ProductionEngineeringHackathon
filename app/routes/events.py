@@ -64,7 +64,8 @@ def list_events():
     query = query.order_by(Event.timestamp.desc())
     total = query.count()
 
-    # Require pagination params together
+    paginated = False
+
     if (page is None) != (per_page is None):
         return jsonify({"error": "page and per_page must be provided together"}), 400
 
@@ -79,6 +80,7 @@ def list_events():
             return jsonify({"error": "Invalid pagination parameters"}), 400
 
         query = query.paginate(page, per_page)
+        paginated = True
 
     result = []
     for event in query:
@@ -87,7 +89,7 @@ def list_events():
             try:
                 details = json.loads(event.details)
             except (json.JSONDecodeError, TypeError):
-                details = event.details
+                details = None
 
         result.append({
             "id": event.id,
@@ -98,12 +100,16 @@ def list_events():
             "details": details
         })
 
-    return jsonify({
+    response = {
         "events": result,
-        "total": total,
-        "page": page,
-        "per_page": per_page
-    }), 200
+        "total": total
+    }
+
+    if paginated:
+        response["page"] = page
+        response["per_page"] = per_page
+
+    return jsonify(response), 200
 
 @events_bp.route("/events", methods=["POST"])
 def create_event():
