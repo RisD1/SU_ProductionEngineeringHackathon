@@ -39,13 +39,14 @@ def list_events():
     event_type = request.args.get("event_type")
     user_id = request.args.get("user_id")
     url_id = request.args.get("url_id")
-
     page = request.args.get("page")
     per_page = request.args.get("per_page")
 
     query = Event.select()
+
     if event_type:
         query = query.where(Event.event_type == event_type)
+
     if user_id is not None:
         try:
             user_id = int(user_id)
@@ -60,9 +61,12 @@ def list_events():
             return jsonify({"error": "url_id must be an integer"}), 400
         query = query.where(Event.url_id == url_id)
 
-
     query = query.order_by(Event.timestamp.desc())
     total = query.count()
+
+    # Require pagination params together
+    if (page is None) != (per_page is None):
+        return jsonify({"error": "page and per_page must be provided together"}), 400
 
     if page is not None and per_page is not None:
         try:
@@ -73,14 +77,11 @@ def list_events():
 
         if page < 1 or per_page < 1 or per_page > 100:
             return jsonify({"error": "Invalid pagination parameters"}), 400
+
         query = query.paginate(page, per_page)
 
-
-    events = query
-
     result = []
-
-    for event in events:
+    for event in query:
         details = None
         if event.details:
             try:
@@ -97,15 +98,22 @@ def list_events():
             "details": details
         })
 
-    return jsonify({"events": result, "total": total, "page": page, "per_page": per_page}), 200
+    return jsonify({
+        "events": result,
+        "total": total,
+        "page": page,
+        "per_page": per_page
+    }), 200
 
 @events_bp.route("/events", methods=["POST"])
 def create_event():
-    data = request.get_json(silent=True) #error is handled by custom handler
+    data = request.get_json(silent=True)
 
-    if not data or data is None:
+    # Invalid JSON / no JSON body
+    if data is None:
         return jsonify({"error": "Invalid JSON"}), 400
 
+    # JSON exists but must be an object
     if not isinstance(data, dict):
         return jsonify({"error": "Request body must be a JSON object"}), 400
 
@@ -128,6 +136,7 @@ def create_event():
 
     user = User.get_or_none(User.id == user_id)
     url = URL.get_or_none(URL.id == url_id)
+
     if not user or not url:
         return jsonify({"error": "User or URL not found"}), 404
 
@@ -139,8 +148,6 @@ def create_event():
             details=details
         )
 
-        event.save()
-
         return jsonify({
             "id": event.id,
             "event_type": event.event_type,
@@ -149,6 +156,9 @@ def create_event():
             "user_id": event.user_id,
             "details": details
         }), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+
+    except ValueError:
+        return jsonify({"error": "Details must be a JSON object"}), 400
+    except Exception:
+        return jsonify({"error": "Could not create event"}), 500
 
