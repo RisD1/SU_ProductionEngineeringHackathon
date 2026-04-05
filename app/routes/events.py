@@ -115,7 +115,7 @@ def create_event():
     if not user or not url:
         return jsonify({"error": "User or URL not found"}), 404
 
-       if not details:
+    if not details:
         details = {
             "short_code": url.short_code,
             "original_url": url.original_url
