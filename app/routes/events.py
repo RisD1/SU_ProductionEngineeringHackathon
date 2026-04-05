@@ -10,19 +10,22 @@ from app.database import db
 events_bp = Blueprint("events", __name__)
 
 
-# auto grader sequence reseter for event id after seeding
+# Auto-grader sequence reset for event id after seeding
 def sync_event_id_sequence():
     db.execute_sql("""
         SELECT setval(
-            pg_get_serial_sequence('event', 'id'),
-            COALESCE((SELECT MAX(id) FROM event), 0) + 1,
-            false
+            pg_get_serial_sequence('"event"', 'id'),
+            COALESCE((SELECT MAX(id) FROM "event"), 1),
+            true
         );
     """)
 
 
 def create_event_record(event_type, url, user, details=None):
-    if details is not None and not isinstance(details, dict):
+    if details is None:
+        details = {}
+
+    if not isinstance(details, dict):
         raise ValueError("Details must be a JSON object")
 
     sync_event_id_sequence()
@@ -31,7 +34,7 @@ def create_event_record(event_type, url, user, details=None):
         event_type=event_type,
         url=url,
         user=user,
-        details=json.dumps(details) if details is not None else None
+        details=json.dumps(details)
     )
     return event
 
@@ -86,12 +89,15 @@ def list_events():
 
     result = []
     for event in query:
-        details = None
+        details = {}
+
         if event.details:
             try:
                 details = json.loads(event.details)
+                if not isinstance(details, dict):
+                    details = {}
             except (json.JSONDecodeError, TypeError):
-                details = None
+                details = {}
 
         result.append({
             "id": event.id,
@@ -127,7 +133,7 @@ def create_event():
     event_type = data.get("event_type")
     url_id = data.get("url_id")
     user_id = data.get("user_id")
-    details = data.get("details")
+    details = data.get("details", {})
 
     if event_type is None or url_id is None or user_id is None:
         return jsonify({"error": "Missing required fields"}), 400
@@ -138,16 +144,14 @@ def create_event():
     if not isinstance(event_type, str):
         return jsonify({"error": "event_type must be a string"}), 400
 
-    if details is not None and not isinstance(details, dict):
+    if not isinstance(details, dict):
         return jsonify({"error": "Details must be a JSON object"}), 400
 
     user = User.get_or_none(User.id == user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
+    url = URL.get_or_none(URL.id == url_id)
 
-    url = URL.get_or_none((URL.id == url_id) & (URL.is_active == True))
-    if not url:
-        return jsonify({"error": "URL not found or inactive"}), 404
+    if not user or not url:
+        return jsonify({"error": "User or URL not found"}), 404
 
     try:
         event = create_event_record(
