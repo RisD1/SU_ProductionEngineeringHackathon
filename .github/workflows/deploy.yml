@@ -17,9 +17,13 @@ jobs:
           key: ${{ secrets.DROPLET_SSH_KEY }}
           script: |
             cd /home/deploy/SU_ProductionEngineeringHackathon
-
+            export DATABASE_HOST=${{secrets.DATABASE_HOST}}
             export DATABASE_PASSWORD=${{secrets.DATABASE_PASSWORD}}
             git pull origin main
             docker compose down
             docker compose up -d --build
+
+            echo "Waiting 15 seconds for services to initialize..."
+            sleep 15
+
             curl -f http://localhost:5000/health
