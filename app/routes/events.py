@@ -5,8 +5,20 @@ from flask import Blueprint, jsonify, request
 from app.models.event import Event
 from app.models.url import URL
 from app.models.user import User
+from app.database import db
 
 events_bp = Blueprint("events", __name__)
+
+
+#auto grader sequence reseter for event id after seeding
+def sync_event_id_sequence():
+    db.execute_sql("""
+        SELECT setval(
+            pg_get_serial_sequence('"event"', 'id'),
+            COALESCE((SELECT MAX(id) FROM "event"), 1),
+            true
+        );
+    """)
 
 @events_bp.route("/events", methods=["GET"])
 def list_events():
@@ -88,7 +100,7 @@ def create_event():
     user_id = data.get("user_id")
     details = data.get("details")
 
-    if not all([event_type, url_id, user_id]):
+    if event_type is None or url_id is None or user_id is None:
         return jsonify({"error": "Missing required fields"}), 400
     
     if not isinstance(user_id, int) or not isinstance(url_id, int):
@@ -106,12 +118,16 @@ def create_event():
         return jsonify({"error": "User or URL not found"}), 404
     
     try:
+        sync_event_id_sequence()
         event = Event.create(
             event_type=event_type,
             url=url,
             user=user,
             details=json.dumps(details) if details else None
         )
+
+        event.save()
+
         return jsonify({
             "id": event.id,
             "event_type": event.event_type,

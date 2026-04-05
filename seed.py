@@ -7,8 +7,6 @@ from app.models.user import User
 from app.models.url import URL
 from app.models.event import Event
 
-from peewee import AutoField
-
 
 def parse_datetime(value):
     return datetime.fromisoformat(value.strip())
@@ -65,9 +63,11 @@ with app.app_context():
         reader = csv.DictReader(f)
         for row in reader:
             Event.create(
+                id=int(row["id"]),
                 url=int(row["url_id"]),
                 user=int(row["user_id"]),
                 event_type=row["event_type"],
+                timestamp=parse_datetime(row["timestamp"]),
                 details=row["details"],
             )
 
