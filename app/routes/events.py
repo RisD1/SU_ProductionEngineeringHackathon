@@ -97,6 +97,10 @@ def create_event():
     user_id = data.get("user_id")
     details = data.get("details")
 
+    ALLOWED_TYPES = {"created", "clicked", "deleted", "updated"}
+    if event_type not in ALLOWED_TYPES:
+        return jsonify({"error": "Invalid event type"}), 422
+
     if event_type is None or url_id is None or user_id is None:
         return jsonify({"error": "Missing required fields"}), 400
     if not isinstance(user_id, int) or not isinstance(url_id, int):
@@ -111,15 +115,23 @@ def create_event():
     if not user or not url:
         return jsonify({"error": "User or URL not found"}), 404
 
+       if not details:
+        details = {
+            "short_code": url.short_code,
+            "original_url": url.original_url
+        }
+
     try:
         sync_event_id_sequence()
         event = Event.create(
             event_type=event_type,
             url=url,
             user=user,
-            details=json.dumps(details) if details else None
+            details=json.dumps(details)
         )
-        event.save()
+
+        #event.save()
+
         return jsonify({
             "id": event.id,
             "event_type": event.event_type,
