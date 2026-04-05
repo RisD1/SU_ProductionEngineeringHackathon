@@ -1,5 +1,7 @@
 import json
+
 from flask import Blueprint, jsonify, request
+
 from app.models.event import Event
 from app.models.url import URL
 from app.models.user import User
@@ -22,7 +24,9 @@ def sync_event_id_sequence():
 def create_event_record(event_type, url, user, details=None):
     if details is not None and not isinstance(details, dict):
         raise ValueError("Details must be a JSON object")
+
     sync_event_id_sequence()
+
     event = Event.create(
         event_type=event_type,
         url=url,
@@ -62,9 +66,12 @@ def list_events():
     query = query.order_by(Event.timestamp.desc())
     total = query.count()
 
-    use_pagination = page is not None and per_page is not None
+    paginated = False
 
-    if use_pagination:
+    if (page is None) != (per_page is None):
+        return jsonify({"error": "page and per_page must be provided together"}), 400
+
+    if page is not None and per_page is not None:
         try:
             page = int(page)
             per_page = int(per_page)
@@ -74,67 +81,44 @@ def list_events():
         if page < 1 or per_page < 1 or per_page > 100:
             return jsonify({"error": "Invalid pagination parameters"}), 400
 
-        max_page = (total + per_page - 1) // per_page if total > 0 else 1
-        if page > max_page:
-            events = []
-            result = []
-            response_page = page
-            response_per_page = per_page
-        else:
-            query = query.paginate(page, per_page)
-            events = query
-            result = []
-            for event in events:
+        query = query.paginate(page, per_page)
+        paginated = True
+
+    result = []
+    for event in query:
+        details = None
+        if event.details:
+            try:
+                details = json.loads(event.details)
+            except (json.JSONDecodeError, TypeError):
                 details = None
-                if event.details:
-                    try:
-                        details = json.loads(event.details)
-                    except (json.JSONDecodeError, TypeError):
-                        details = event.details
-                result.append({
-                    "id": event.id,
-                    "event_type": event.event_type,
-                    "timestamp": event.timestamp.isoformat(),
-                    "url_id": event.url_id,
-                    "user_id": event.user_id,
-                    "details": details
-                })
-            response_page = page
-            response_per_page = per_page
-    else:
-        events = query
-        result = []
-        for event in events:
-            details = None
-            if event.details:
-                try:
-                    details = json.loads(event.details)
-                except (json.JSONDecodeError, TypeError):
-                    details = event.details
-            result.append({
-                "id": event.id,
-                "event_type": event.event_type,
-                "timestamp": event.timestamp.isoformat(),
-                "url_id": event.url_id,
-                "user_id": event.user_id,
-                "details": details
-            })
-        response_page = None
-        response_per_page = None
 
-    response_data = {"events": result, "total": total}
-    if use_pagination and response_page is not None:
-        response_data["page"] = response_page
-        response_data["per_page"] = response_per_page
+        result.append({
+            "id": event.id,
+            "event_type": event.event_type,
+            "timestamp": event.timestamp.isoformat(),
+            "url_id": event.url_id,
+            "user_id": event.user_id,
+            "details": details
+        })
 
-    return jsonify(response_data), 200
+    response = {
+        "events": result,
+        "total": total
+    }
+
+    if paginated:
+        response["page"] = page
+        response["per_page"] = per_page
+
+    return jsonify(response), 200
 
 
 @events_bp.route("/events", methods=["POST"])
 def create_event():
     data = request.get_json(silent=True)
 
-    if not data or data is None:
+    if data is None:
         return jsonify({"error": "Invalid JSON"}), 400
 
     if not isinstance(data, dict):
@@ -180,5 +164,7 @@ def create_event():
             "details": details
         }), 201
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except ValueError:
+        return jsonify({"error": "Details must be a JSON object"}), 400
+    except Exception:
+        return jsonify({"error": "Could not create event"}), 500
