@@ -49,20 +49,20 @@ def list_events():
         try:
             page = int(page)
             per_page = int(per_page)
+            if page < 1 or per_page < 1 or per_page > 100:
+                return jsonify({"error": "Invalid pagination parameters"}), 400
+            query = query.paginate(page, per_page)
         except ValueError:
             return jsonify({"error": "page and per_page must be integers"}), 400
-        if page < 1 or per_page < 1 or per_page > 100:
-            return jsonify({"error": "Invalid pagination parameters"}), 400
-        query = query.paginate(page, per_page)
 
     result = []
     for event in query:
-        details = None
-        if event.details:
+        details = event.details
+        if isinstance(details, str):
             try:
-                details = json.loads(event.details) if isinstance(event.details, str) else event.details
-            except (json.JSONDecodeError, TypeError):
-                details = event.details
+                details = json.loads(details)
+            except:
+                pass
 
         result.append({
             "id": event.id,
@@ -75,11 +75,13 @@ def list_events():
 
     return jsonify({
         "kind": "list",
+        "total_items": total,
         "sample": result,
         "metadata": {
+            "page": int(page) if page else None,
+            "per_page": int(per_page) if per_page else None,
             "total": total,
-            "page": page,
-            "per_page": per_page
+            "total_items": total
         }
     }), 200
 
@@ -99,7 +101,7 @@ def create_event():
     if event_type not in ALLOWED_TYPES:
         return jsonify({"error": "Invalid event type"}), 422
 
-    if event_type is None or url_id is None or user_id is None:
+    if not all([event_type, url_id, user_id]):
         return jsonify({"error": "Missing required fields"}), 400
 
     user = User.get_or_none(User.id == user_id)
@@ -113,7 +115,7 @@ def create_event():
             event_type=event_type,
             url=url,
             user=user,
-            details=json.dumps(details) if details else None
+            details=json.dumps(details) if isinstance(details, dict) else details
         )
 
         return jsonify({
