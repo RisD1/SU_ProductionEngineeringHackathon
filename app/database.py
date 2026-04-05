@@ -10,14 +10,14 @@ class BaseModel(Model):
         database = db
 
 
-def connect_with_retry(database, retries=10, delay=2):
+def connect_with_retry(database, retries=20, delay=2):
     for i in range(retries):
         try:
             database.connect(reuse_if_open=True)
             print("Connected to DB")
             return
-        except Exception:
-            print(f"DB not ready, retrying... ({i+1}/{retries})")
+        except Exception as e:
+            print(f"DB not ready, retrying... ({i+1}/{retries}) | Error: {e}")
             time.sleep(delay)
     raise Exception("Could not connect to DB")
 
@@ -37,16 +37,15 @@ def init_db(app):
     from app.models.url import URL
     from app.models.event import Event
 
-    # connect_with_retry(db)
-    db.connect(reuse_if_open=True)
+    connect_with_retry(db)
+
     db.create_tables([User, URL, Event], safe=True)
     db.close()
 
     @app.before_request
     def _db_connect():
         if db.is_closed():
-            # connect_with_retry(db)
-            db.connect(reuse_if_open=True)
+            connect_with_retry(db)
 
     @app.teardown_appcontext
     def _db_close(exc):
