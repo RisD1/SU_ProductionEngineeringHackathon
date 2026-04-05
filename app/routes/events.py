@@ -10,16 +10,6 @@ from app.database import db
 events_bp = Blueprint("events", __name__)
 
 
-#auto grader sequence reseter for event id after seeding
-def sync_event_id_sequence():
-    db.execute_sql("""
-        SELECT setval(
-            pg_get_serial_sequence('"event"', 'id'),
-            COALESCE((SELECT MAX(id) FROM "event"), 1),
-            true
-        );
-    """)
-
 @events_bp.route("/events", methods=["GET"])
 def list_events():
     event_type = request.args.get("event_type")
@@ -46,7 +36,6 @@ def list_events():
             return jsonify({"error": "url_id must be an integer"}), 400
         query = query.where(Event.url_id == url_id)
 
-
     query = query.order_by(Event.timestamp.desc())
     total = query.count()
 
@@ -60,7 +49,6 @@ def list_events():
         if page < 1 or per_page < 1 or per_page > 100:
             return jsonify({"error": "Invalid pagination parameters"}), 400
         query = query.paginate(page, per_page)
-
 
     events = query
 
@@ -85,9 +73,10 @@ def list_events():
 
     return jsonify({"events": result, "total": total, "page": page, "per_page": per_page}), 200
 
+
 @events_bp.route("/events", methods=["POST"])
 def create_event():
-    data = request.get_json(silent=True) #error is handled by custom handler
+    data = request.get_json(silent=True)
 
     if not data or data is None:
         return jsonify({"error": "Invalid JSON"}), 400
@@ -109,8 +98,11 @@ def create_event():
     if not isinstance(event_type, str):
         return jsonify({"error": "event_type must be a string"}), 400
 
-    if details is not None and not isinstance(details, dict):
-        return jsonify({"error": "Details must be a JSON object"}), 400
+    if details is not None:
+        try:
+            json.dumps(details)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Details must be JSON-serializable"}), 400
 
     user = User.get_or_none(User.id == user_id)
     url = URL.get_or_none(URL.id == url_id)
@@ -118,15 +110,16 @@ def create_event():
         return jsonify({"error": "User or URL not found"}), 404
 
     try:
-        sync_event_id_sequence()
+        details_json = json.dumps(details) if details is not None else None
+
         event = Event.create(
             event_type=event_type,
             url=url,
             user=user,
-            details=json.dumps(details) if details else None
+            details=details_json
         )
 
-        event.save()
+        return_details = details
 
         return jsonify({
             "id": event.id,
@@ -134,8 +127,7 @@ def create_event():
             "timestamp": event.timestamp.isoformat(),
             "url_id": event.url_id,
             "user_id": event.user_id,
-            "details": details
+            "details": return_details
         }), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
