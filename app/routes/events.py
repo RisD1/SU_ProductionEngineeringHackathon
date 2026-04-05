@@ -206,11 +206,9 @@ def create_event():
 
     try:
         event = create_event_record(
-        event = create_event_record(
             event_type=event_type,
             url=url,
             user=user,
-            details=details
             details=details
         )
 
