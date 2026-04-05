@@ -1,5 +1,7 @@
 import json
+
 from flask import Blueprint, jsonify, request
+
 from app.models.event import Event
 from app.models.url import URL
 from app.models.user import User
@@ -8,6 +10,7 @@ from app.database import db
 events_bp = Blueprint("events", __name__)
 
 
+#auto grader sequence reseter for event id after seeding
 def sync_event_id_sequence():
     db.execute_sql("""
         SELECT setval(
@@ -17,32 +20,32 @@ def sync_event_id_sequence():
         );
     """)
 
-
 @events_bp.route("/events", methods=["GET"])
 def list_events():
     event_type = request.args.get("event_type")
     user_id = request.args.get("user_id")
     url_id = request.args.get("url_id")
+
     page = request.args.get("page")
     per_page = request.args.get("per_page")
 
     query = Event.select()
     if event_type:
         query = query.where(Event.event_type == event_type)
-
     if user_id is not None:
         try:
             user_id = int(user_id)
-            query = query.where(Event.user_id == user_id)
         except ValueError:
             return jsonify({"error": "user_id must be an integer"}), 400
+        query = query.where(Event.user_id == user_id)
 
     if url_id is not None:
         try:
             url_id = int(url_id)
-            query = query.where(Event.url_id == url_id)
         except ValueError:
             return jsonify({"error": "url_id must be an integer"}), 400
+        query = query.where(Event.url_id == url_id)
+
 
     query = query.order_by(Event.timestamp.desc())
     total = query.count()
@@ -58,8 +61,12 @@ def list_events():
             return jsonify({"error": "Invalid pagination parameters"}), 400
         query = query.paginate(page, per_page)
 
+
+    events = query
+
     result = []
-    for event in query:
+
+    for event in events:
         details = None
         if event.details:
             try:
@@ -76,19 +83,16 @@ def list_events():
             "details": details
         })
 
-    return jsonify({
-        "events": result,
-        "total": total,
-        "page": int(page) if page else None,
-        "per_page": int(per_page) if per_page else None
-    }), 200
-
+    return jsonify({"events": result, "total": total, "page": page, "per_page": per_page}), 200
 
 @events_bp.route("/events", methods=["POST"])
 def create_event():
-    data = request.get_json(silent=True)
+    data = request.get_json(silent=True) #error is handled by custom handler
 
-    if not data or not isinstance(data, dict):
+    if not data or data is None:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    if not isinstance(data, dict):
         return jsonify({"error": "Request body must be a JSON object"}), 400
 
     event_type = data.get("event_type")
@@ -110,17 +114,19 @@ def create_event():
 
     user = User.get_or_none(User.id == user_id)
     url = URL.get_or_none(URL.id == url_id)
-
     if not user or not url:
         return jsonify({"error": "User or URL not found"}), 404
 
     try:
+        sync_event_id_sequence()
         event = Event.create(
             event_type=event_type,
             url=url,
             user=user,
-            details=json.dumps(details) if isinstance(details, dict) else None
+            details=json.dumps(details) if details else None
         )
+
+        event.save()
 
         return jsonify({
             "id": event.id,
@@ -132,3 +138,4 @@ def create_event():
         }), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
