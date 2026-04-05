@@ -9,10 +9,10 @@ class BaseModel(Model):
     class Meta:
         database = db,
 
-def connect_with_retry(db, retries=10, delay=2):
+def connect_with_retry(database, retries=10, delay=2):
     for i in range(retries):
         try:
-            db.connect(reuse_if_open=True)
+            database.connect(reuse_if_open=True)
             print("Connected to DB")
             return
         except Exception:
