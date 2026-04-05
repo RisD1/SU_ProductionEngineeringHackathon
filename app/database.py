@@ -1,6 +1,5 @@
 import os
 import time
-
 from peewee import DatabaseProxy, Model, PostgresqlDatabase
 
 db = DatabaseProxy()
@@ -8,6 +7,8 @@ db = DatabaseProxy()
 
 class BaseModel(Model):
     class Meta:
+        database = db
+
         database = db,
 
 def connect_with_retry(db, retries=10, delay=2):
@@ -16,7 +17,7 @@ def connect_with_retry(db, retries=10, delay=2):
             db.connect(reuse_if_open=True)
             print("Connected to DB")
             return
-        except Exception as e:
+        except Exception:
             print(f"DB not ready, retrying... ({i+1}/{retries})")
             time.sleep(delay)
     raise Exception("Could not connect to DB")
@@ -25,11 +26,12 @@ def connect_with_retry(db, retries=10, delay=2):
 def init_db(app):
     database = PostgresqlDatabase(
         os.environ.get("DATABASE_NAME", "hackathon_db"),
-        host=os.environ.get("DATABASE_HOST", "localhost"),
+        host=os.environ.get("DATABASE_HOST", "postgres"),
         port=int(os.environ.get("DATABASE_PORT", 5432)),
         user=os.environ.get("DATABASE_USER", "postgres"),
         password=os.environ.get("DATABASE_PASSWORD", "postgres"),
     )
+
     db.initialize(database)
 
     from app.models.user import User
@@ -42,7 +44,8 @@ def init_db(app):
 
     @app.before_request
     def _db_connect():
-        connect_with_retry(db)
+        if db.is_closed():
+            connect_with_retry(db)
 
     @app.teardown_appcontext
     def _db_close(exc):
