@@ -19,6 +19,7 @@ jobs:
             cd /home/deploy/SU_ProductionEngineeringHackathon
 
             export DATABASE_HOST=${{ secrets.DATABASE_HOST }}
+            export DATABASE_PASSWORD=${{secrets.DATABASE_PASSWORD}}
             git pull origin main
             docker compose down
             docker compose up -d --build
