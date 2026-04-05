@@ -47,11 +47,11 @@ jobs:
           --health-retries=5
 
     env:
-      DB_NAME: hackathon_db
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_HOST: 127.0.0.1
-      DB_PORT: 5432
+      DATABASE_NAME: hackathon_db
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: 5432
 
     steps:
       - name: Checkout
