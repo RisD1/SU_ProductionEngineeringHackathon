@@ -25,7 +25,7 @@ def connect_with_retry(database, retries=10, delay=2):
 def init_db(app):
     database = PostgresqlDatabase(
         os.environ.get("DB_NAME", "hackathon_db"),
-        host=os.environ.get("DB_HOST", "db"),
+        host=os.environ.get("DB_HOST", "localhost"),
         port=int(os.environ.get("DB_PORT", 5432)),
         user=os.environ.get("DB_USER", "postgres"),
         password=os.environ.get("DB_PASSWORD", "postgres"),
@@ -37,14 +37,16 @@ def init_db(app):
     from app.models.url import URL
     from app.models.event import Event
 
-    connect_with_retry(db)
+    # connect_with_retry(db)
+    db.connect(reuse_if_open=True)
     db.create_tables([User, URL, Event], safe=True)
     db.close()
 
     @app.before_request
     def _db_connect():
         if db.is_closed():
-            connect_with_retry(db)
+            # connect_with_retry(db)
+            db.connect(reuse_if_open=True)
 
     @app.teardown_appcontext
     def _db_close(exc):
