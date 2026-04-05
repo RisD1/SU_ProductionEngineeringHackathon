@@ -32,59 +32,51 @@ def list_events():
     user_id = request.args.get("user_id")
     url_id = request.args.get("url_id")
 
-    # FIX FOR CHALLENGE #2: Select from Event only.
-    # Do not join URL or filter by is_active so historical data remains visible.
+    # FIX FOR #2: Unfiltered select to see all history (Unseen Observer)
     query = Event.select().order_by(Event.id)
 
     if event_type:
         query = query.where(Event.event_type == event_type)
-
     if user_id:
-        try:
-            query = query.where(Event.user_id == int(user_id))
-        except ValueError:
-            return jsonify({"error": "user_id must be an integer"}), 400
-
+        query = query.where(Event.user_id == int(user_id))
     if url_id:
-        try:
-            query = query.where(Event.url_id == int(url_id))
-        except ValueError:
-            return jsonify({"error": "url_id must be an integer"}), 400
+        query = query.where(Event.url_id == int(url_id))
 
     total = query.count()
 
-    p_val = None
-    pp_val = None
-    if page is not None and per_page is not None:
-        try:
-            p_val = int(page)
-            pp_val = int(per_page)
-        except ValueError:
-            return jsonify({"error": "page and per_page must be integers"}), 400
+    # Cast pagination to match users.py metadata style
+    p_int = int(page) if page else None
+    pp_int = int(per_page) if per_page else None
 
-        if p_val < 1 or pp_val < 1 or pp_val > 100:
+    if p_int and pp_int:
+        if p_int < 1 or pp_int < 1 or pp_int > 100:
             return jsonify({"error": "Invalid pagination parameters"}), 400
-        query = query.paginate(p_val, pp_val)
+        query = query.paginate(p_int, pp_int)
 
     results = []
     for event in query:
+        # Use str() if isoformat() fails to ensure full precision from the DB is kept
+        try:
+            ts = event.timestamp.isoformat()
+        except AttributeError:
+            ts = str(event.timestamp)
+
         results.append({
             "id": event.id,
             "event_type": event.event_type,
-            "timestamp": event.timestamp.isoformat() if hasattr(event.timestamp, 'isoformat') else event.timestamp,
+            "timestamp": ts,
             "url_id": event.url_id,
             "user_id": event.user_id,
             "details": format_details(event.details)
         })
 
-    # Metadata format matches users.py exactly
     return jsonify({
         "kind": "list",
         "sample": results,
         "metadata": {
             "total": total,
-            "page": p_val,
-            "per_page": pp_val
+            "page": p_int,
+            "per_page": pp_int
         }
     }), 200
 
@@ -105,29 +97,34 @@ def create_event():
 
     user = User.get_or_none(User.id == user_id)
     if not user:
-        return jsonify({"error": f"User with id {user_id} not found"}), 404
+        return jsonify({"error": "User not found"}), 404
 
-    # CHALLENGE #4: New events still require an active URL
+    # Keep URL active check for POST only
     url = URL.get_or_none((URL.id == url_id) & (URL.is_active == True))
     if not url:
-        return jsonify({"error": f"URL with id {url_id} not found or inactive"}), 404
+        return jsonify({"error": "URL not found or inactive"}), 404
 
     try:
-        # CHALLENGE #6: json.dumps allows non-dict types (strings, ints, etc.)
+        # Challenge #6: Preserve original detail type via json.dumps
         db_details = json.dumps(details) if details is not None else None
 
         event = Event.create(
             id=get_next_event_id(),
-            event_type=event_type.strip(),
+            event_type=event_type,
             url=url,
             user=user,
             details=db_details
         )
 
+        try:
+            ts = event.timestamp.isoformat()
+        except AttributeError:
+            ts = str(event.timestamp)
+
         return jsonify({
             "id": event.id,
             "event_type": event.event_type,
-            "timestamp": event.timestamp.isoformat() if hasattr(event.timestamp, 'isoformat') else event.timestamp,
+            "timestamp": ts,
             "url_id": event.url_id,
             "user_id": event.user_id,
             "details": format_details(event.details)
